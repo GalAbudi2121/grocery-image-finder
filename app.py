@@ -4,8 +4,8 @@ import os
 
 # --- CONFIGURATION ---
 # Use the same keys you used before
-API_KEY = "AIzaSyBzfTFCiFVD6f_voGQhYG3Rd4iN7YUzRMM"  # המפתח החדש שיצרת
-CX = "96dad542af1394d49"
+API_KEY = st.secrets["GOOGLE_API_KEY"]
+CX = st.secrets["GOOGLE_CX"]
 
 st.set_page_config(page_title="Product Image Finder", page_icon="🛒")
 
@@ -57,4 +57,5 @@ if st.button("Search Images"):
                 st.error(f"Error: {response.status_code}")
                 st.json(response.json())
     else:
+
         st.info("Please enter both product name and manufacturer.")
