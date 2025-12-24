@@ -10,8 +10,7 @@ except:
     st.error("שגיאה: מפתחות ה-API לא הוגדרו ב-Secrets.")
     st.stop()
 
-# עיצוב דף האפליקציה
-st.set_page_config(page_title="חיפוש תמונות מוצר", page_icon="🛒")
+st.set_page_config(page_title="חיפוש מוצר ממוקד", page_icon="🛒")
 
 # עיצוב לעברית (RTL)
 st.markdown("""
@@ -22,18 +21,21 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🛒 חיפוש תמונות מוצר נקיות")
-st.write("הכנס שם מוצר למציאת תמונות איכותיות:")
+st.title("🛒 חיפוש מוצר ממוקד למכולת")
+st.write("החיפוש מוגדר למצוא מוצרים ספציפיים בישראל.")
 
 # --- קלט מהמשתמש ---
-product = st.text_input("שם המוצר:", placeholder="לדוגמה: מטרנה שלב 1")
-manufacturer = st.text_input("שם היצרן (אופציונלי):")
+product = st.text_input("מה שם המוצר שאתה מחפש?", placeholder="לדוגמה: במבה אסם 80 גרם")
+manufacturer = st.text_input("שם היצרן (לא חובה):")
 
-if st.button("מצא תמונה"):
+if st.button("חפש מוצר"):
     if product:
-        exclude_sites = "-site:amazon.* -site:youtube.com -site:pinterest.* -site:shutterstock.com -site:zap.co.il"
-        clean_keywords = "צילום מוצר רקע לבן product white background"
-        query = f"{manufacturer} {product} {clean_keywords} {exclude_sites}"
+        # בניית שאילתה חזקה בעברית עם סינון אתרים מחו"ל
+        # השילוב של "מחיר" או "ברקוד" עוזר למצוא מוצרים אמיתיים ולא תמונות אווירה
+        if manufacturer:
+            query = f'"{manufacturer}" "{product}" מוצר'
+        else:
+            query = f'"{product}" מוצר תמונה'
         
         url = "https://www.googleapis.com/customsearch/v1"
         params = {
@@ -41,46 +43,43 @@ if st.button("מצא תמונה"):
             "cx": CX,
             "q": query,
             "searchType": "image",
-            "num": 5,
+            "num": 8,
             "safe": "active",
-            "imgSize": "large"
+            "gl": "il",    # הגדרה לחיפוש מישראל
+            "lr": "lang_iw" # הגדרה לתוצאות בעברית
         }
 
-        with st.spinner('מחפש ומוריד תמונות לתצוגה...'):
+        with st.spinner('מחפש במאגרי המוצרים בישראל...'):
             response = requests.get(url, params=params)
             if response.status_code == 200:
                 data = response.json()
                 items = data.get("items", [])
 
                 if items:
-                    for i, item in enumerate(items):
-                        img_url = item['link']
-                        
-                        try:
-                            # הורדת התמונה לזיכרון (זה פותר את השגיאה שקיבלת)
-                            img_response = requests.get(img_url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
-                            if img_response.status_code == 200:
-                                img_bytes = BytesIO(img_response.content)
-                                
-                                # הצגת התמונה מהזיכרון
-                                st.info(f"מקור: {item['displayLink']}")
-                                st.image(img_bytes, use_container_width=True)
-                                
-                                # כפתור הורדה
-                                st.download_button(
-                                    label="💾 שמור תמונה זו",
-                                    data=img_response.content,
-                                    file_name=f"{product.replace(' ', '_')}_{i}.jpg",
-                                    mime="image/jpeg",
-                                    key=f"btn_{i}"
-                                )
-                                st.divider()
-                        except Exception as e:
-                            # אם תמונה ספציפית עדיין נחסמת, פשוט נדלג עליה
-                            continue
+                    st.success(f"מצאתי {len(items)} תוצאות רלוונטיות:")
+                    # תצוגה של התמונות בגלריה (2 בשורה) כדי שיהיה קל להשוות
+                    cols = st.columns(2)
+                    for idx, item in enumerate(items):
+                        with cols[idx % 2]:
+                            img_url = item['link']
+                            try:
+                                img_response = requests.get(img_url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+                                if img_response.status_code == 200:
+                                    st.image(img_response.content, use_container_width=True)
+                                    st.caption(f"מקור: {item['displayLink']}")
+                                    st.download_button(
+                                        label="💾 שמור",
+                                        data=img_response.content,
+                                        file_name=f"{product}.jpg",
+                                        mime="image/jpeg",
+                                        key=f"btn_{idx}"
+                                    )
+                                    st.divider()
+                            except:
+                                continue
                 else:
-                    st.warning("לא נמצאו תמונות.")
+                    st.warning("לא נמצאו תמונות מדויקות. נסה לכתוב את השם קצת אחרת.")
             else:
-                st.error("שגיאה בחיבור לגוגל. וודא שהמפתחות נכונים.")
+                st.error("שגיאה בחיבור. ייתכן שנגמרה המכסה היומית של גוגל.")
     else:
-        st.info("בבקשה רשום שם מוצר.")
+        st.info("בבקשה הכנס שם מוצר.")
