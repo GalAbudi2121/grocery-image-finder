@@ -11,30 +11,38 @@ except:
     st.stop()
 
 # עיצוב דף האפליקציה
-st.set_page_config(page_title="חיפוש תמונות למכולת", page_icon="🛒", layout="centered")
+st.set_page_config(page_title="חיפוש תמונות נקיות למכולת", page_icon="🛒", layout="centered")
 
-# עיצוב לעברית (RTL)
+# עיצוב לעברית (RTL) ושיפור כפתורים
 st.markdown("""
     <style>
     .stApp { text-align: right; direction: rtl; }
     div[data-baseweb="input"] { direction: rtl; }
     div[data-testid="stMarkdownContainer"] { text-align: right; }
-    button { width: 100%; }
+    button { background-color: #2e7d32 !important; color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🛒 מכולת - מוצא תמונות מוצרים")
-st.write("חפש תמונות רשמיות של מוצרים בקלות:")
+st.title("🛒 חיפוש תמונות מוצר נקיות")
+st.write("האפליקציה תנסה למצוא תמונות רשמיות על רקע לבן ללא הסחות דעת.")
 
 # --- קלט מהמשתמש ---
-product = st.text_input("שם המוצר (חובה):", placeholder="לדוגמה: קוטג' 5%")
-manufacturer = st.text_input("שם היצרן (אופציונלי):", placeholder="לדוגמה: תנובה")
-num_results = st.slider("מספר תמונות להצגה", 1, 10, 3)
+product = st.text_input("שם המוצר:", placeholder="לדוגמה: במבה אסם 80 גרם")
+manufacturer = st.text_input("שם היצרן (אופציונלי):", placeholder="לדוגמה: אסם")
 
-if st.button("חפש מוצר"):
+if st.button("מצא תמונה נקייה"):
     if product:
-        # בניית שאילתה
-        query = f"{manufacturer} {product} תמונה רשמית מוצר" if manufacturer else f"{product} תמונה רשמית מוצר"
+        # בניית שאילתה חכמה עם סינון אתרים (Negative keywords)
+        # אנחנו מוסיפים "-site:amazon.com" וכו' כדי לסנן אותם
+        exclude_sites = "-site:amazon.* -site:youtube.com -site:pinterest.* -site:shutterstock.com -site:zap.co.il"
+        
+        # הוספת מילות מפתח לתמונה נקייה
+        clean_keywords = "צילום מוצר רקע לבן product white background"
+        
+        if manufacturer:
+            query = f"{manufacturer} {product} {clean_keywords} {exclude_sites}"
+        else:
+            query = f"{product} {clean_keywords} {exclude_sites}"
         
         url = "https://www.googleapis.com/customsearch/v1"
         params = {
@@ -42,51 +50,50 @@ if st.button("חפש מוצר"):
             "cx": CX,
             "q": query,
             "searchType": "image",
-            "num": num_results,
+            "num": 6, # מביא קצת יותר תוצאות כדי שתוכל לבחור את הכי נקייה
             "safe": "active",
-            "lr": "lang_iw"
+            "imgSize": "large", # מעדיף תמונות גדולות ואיכותיות
+            "imgType": "photo" # נמנע מאיורים/וקטורים
         }
 
-        with st.spinner('מחפש...'):
+        with st.spinner('מסנן תמונות ומחפש את הכי מתאימות...'):
             response = requests.get(url, params=params)
             if response.status_code == 200:
                 data = response.json()
                 items = data.get("items", [])
 
                 if items:
-                    st.success(f"מצאתי {len(items)} תוצאות")
+                    st.success(f"מצאתי {len(items)} אפשרויות נקיות:")
                     for item in items:
-                        st.subheader(item['title'])
+                        # הצגת כותרת האתר כדי שתדע מאיפה זה הגיע (למשל אתר היצרן)
+                        st.info(f"מקור: {item['displayLink']}")
                         img_url = item['link']
                         
-                        # הצגת התמונה
                         st.image(img_url, use_container_width=True)
                         
-                        # יצירת כפתור הורדה
+                        # כפתור הורדה
                         try:
                             img_response = requests.get(img_url, timeout=10)
                             if img_response.status_code == 200:
-                                # הכנת הקובץ להורדה
                                 img_bytes = BytesIO(img_response.content)
-                                file_extension = img_url.split('.')[-1].split('?')[0]
-                                if len(file_extension) > 4: file_extension = "jpg"
+                                file_name = f"{product.replace(' ', '_')}.jpg"
                                 
                                 st.download_button(
-                                    label="📥 הורד תמונה זו",
+                                    label="💾 שמור תמונה זו למכשיר",
                                     data=img_bytes,
-                                    file_name=f"{product.replace(' ', '_')}.{file_extension}",
-                                    mime=f"image/{file_extension}"
+                                    file_name=file_name,
+                                    mime="image/jpeg",
+                                    key=img_url # מפתח ייחודי לכל כפתור
                                 )
                         except:
-                            st.write("לא ניתן ליצור כפתור הורדה ישיר לתמונה זו.")
+                            st.write("לא ניתן להוריד אוטומטית - לחץ לחיצה ארוכה על התמונה לשמירה.")
                         
-                        st.write(f"[קישור למקור התמונה]({item['image']['contextLink']})")
                         st.divider()
                 else:
-                    st.warning("לא נמצאו תמונות. נסה לחפש שוב במילים אחרות.")
+                    st.warning("לא נמצאו תמונות מספיק טובות. נסה להוריד את שם היצרן או לקצר את השם.")
             else:
-                st.error(f"שגיאה: {response.status_code}. וודא שהמפתחות ב-Secrets נכונים.")
+                st.error("שגיאה בחיבור לגוגל. וודא שחבילת החיפוש החינמית לא נגמרה (100 ליום).")
     else:
-        st.info("בבקשה הכנס שם מוצר.")
+        st.info("בבקשה רשום שם מוצר.")
 
-st.caption("האפליקציה נועדה לשימוש פנימי במכולת. שים לב לזכויות יוצרים.")
+st.caption("הטיפ של Gemini: ככל שתהיה ספציפי יותר (למשל 'במבה 80 גרם' במקום רק 'במבה'), התמונה תהיה מדויקת יותר.")
